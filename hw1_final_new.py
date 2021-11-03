@@ -1,4 +1,5 @@
 # %%
+import pickle
 from sklearn import preprocessing
 from numpy.lib.function_base import select
 from sklearn.metrics import roc_auc_score
@@ -10,6 +11,8 @@ import matplotlib
 import pandas as pd
 
 # %%
+
+
 class Model:
     def __init__(self):
         self.layers = []
@@ -32,7 +35,7 @@ class Model:
     def show_latent(self, X):
 
         for i, _ in enumerate(self.layers):
-            if i < len(self.layers)-2:
+            if i < len(self.layers)-3:
                 forward = self.layers[i].forward(X)
                 X = forward
 
@@ -53,6 +56,7 @@ class Model:
         verbose=False
     ):
         n = X_train.shape[0]
+        permutation = np.random.permutation(X_train.shape[0])
         for epoch in range(epochs):
             if n % batch_size > 0:
                 times = int(n/batch_size)
@@ -60,25 +64,28 @@ class Model:
                 times = int(n/batch_size)
                 times = times - 1
 
+            # random index
             for time in range(times+1):
                 if time != times:
+                    index = permutation[batch_size*time:batch_size*(time+1)]
                     loss = self._run_epoch(
-                        X_train[batch_size*time:batch_size*(time+1)].T,
-                        Y_train[batch_size*time:batch_size*(time+1)],
+                        X_train[index].T,
+                        Y_train[index],
                         learning_rate, loss_fcn, optimizer, epoch, lamb, lamb2,
                         debug)
                 else:
+                    index = permutation[batch_size*time:n]
                     loss = self._run_epoch(
-                        X_train[batch_size*time:n].T,
-                        Y_train[batch_size*time:n],
+                        X_train[index].T,
+                        Y_train[index],
                         learning_rate, loss_fcn, optimizer, epoch, lamb, lamb2,
                         debug)
 
-            self.loss.append(loss**0.5)
+            self.loss.append(loss)
 
             if verbose:
                 if epoch % 50 == 0:
-                    print(f'Epoch: {epoch}. Loss: {loss**0.5}')
+                    print(f'Epoch: {epoch}. Loss: {loss}')
 
     def _run_epoch(self, X, Y, learning_rate, loss_fcn, optimizer, epoch, lamb, lamb2, debug=False):
         orig_data = X
@@ -165,7 +172,7 @@ class Linear(Layer):
 
     def backward(self, dA):
         dW = np.dot(dA, self._prev_acti.T)
-        dB = dA.mean(axis=1, keepdims=True)
+        dB = dA.sum(axis=1, keepdims=True)
 
         delta = np.dot(self.weights.T, dA)
 
@@ -392,7 +399,7 @@ model_classification.train(X_train=X_train_class,
                            epochs=10,
                            loss_fcn='binary',
                            optimizer='sgd',
-                           batch_size=128,
+                           batch_size=64,
                            lamb=0.3,
                            lamb2=0.45,
                            debug=False,
@@ -453,10 +460,10 @@ plot_latent_3d(latent3_10, index_1, index_0, '3D feature epoch 10')
 model_classification.train(X_train=X_train_class,
                            Y_train=y_train_class,
                            learning_rate=5*10**-3,
-                           epochs=10000,
+                           epochs=4990,
                            loss_fcn='binary',
                            optimizer='sgd',
-                           batch_size=128,
+                           batch_size=64,
                            lamb=0.3,
                            lamb2=0.45,
                            debug=False,
@@ -465,7 +472,7 @@ model_classification.train(X_train=X_train_class,
 latent3_10000 = model_classification.show_latent(X_test_class.T).T
 # %%
 # plot
-plot_latent_3d(latent3_10000, index_1, index_0, '3D feature epoch 10000')
+plot_latent_3d(latent3_10000, index_1, index_0, '3D feature epoch 5000')
 
 # %%
 plt.plot(model_classification.loss)
@@ -487,7 +494,7 @@ prediction_class_label = np.array(prediction_class > 0.5).astype(int).flatten()
 cross_entropy_test = np.mean(-y_test_class * np.log(prediction_class) -
                              (1 - y_test_class) * np.log(1 - prediction_class))
 
-#%%
+# %%
 accuracy(prediction_class_label, y_test_class)
 
 # %%
@@ -512,7 +519,7 @@ model_classification_2.train(X_train=X_train_class,
                              epochs=10,
                              loss_fcn='binary',
                              optimizer='sgd',
-                             batch_size=128,
+                             batch_size=64,
                              lamb=0.3,
                              lamb2=0.45,
                              debug=False,
@@ -526,17 +533,17 @@ plot_latent_2d(latent3_10_2, index_1, index_0, '2D feature epoch 10')
 model_classification_2.train(X_train=X_train_class,
                              Y_train=y_train_class,
                              learning_rate=5*10**-3,
-                             epochs=9990,
+                             epochs=4990,
                              loss_fcn='binary',
                              optimizer='sgd',
-                             batch_size=128,
+                             batch_size=64,
                              lamb=0.3,
                              lamb2=0.45,
                              debug=False,
                              verbose=True)
 
 latent3_10000_2 = model_classification_2.show_latent(X_test_class.T).T
-plot_latent_2d(latent3_10000_2, index_1, index_0, '2D feature epoch 10000')
+plot_latent_2d(latent3_10000_2, index_1, index_0, '2D feature epoch 5000')
 
 
 #############################################################
@@ -603,15 +610,22 @@ model_regression.train(X_train=X_train_reg,
                        epochs=15000,
                        loss_fcn='linear',
                        optimizer='sgd',
-                       batch_size=128,
+                       batch_size=64,
                        lamb=0.3,
                        lamb2=0.45,
                        verbose=True)
 
-
+# %%
 plt.plot(model_regression.loss)
 plt.title("Learning Curve for regression Problem")
-plt.ylabel("RMSE")
+plt.ylabel("MSE")
+plt.xlabel("epoch")
+
+# %%
+plt.plot(model_regression.loss)
+plt.ylim(0, 30)
+plt.title("Learning Curve for regression Problem")
+plt.ylabel("MSE")
 plt.xlabel("epoch")
 
 # %%
@@ -637,7 +651,7 @@ plt.title('Prediction for testing data')
 
 # %%
 # feature selection
-threshold = 0.1
+threshold = 0.5
 rmse_new = 0
 no_variable = 9
 # %%
@@ -680,7 +694,7 @@ while rmse_new < rmse_train + threshold and len(remove_index) < no_variable - 1:
                                   epochs=15000,
                                   loss_fcn='linear',
                                   optimizer='sgd',
-                                  batch_size=128,
+                                  batch_size=64,
                                   lamb=0.3,
                                   lamb2=0.45,
                                   verbose=False)
@@ -716,7 +730,7 @@ print("Done!")
 
 
 # %%
-feature_selection_data_final = X_train_reg[:,[4,5,6]]
+feature_selection_data_final = X_train_reg[:, [6, 7, 8, 9]]
 
 # model
 model_regression_final = Model()
@@ -733,45 +747,47 @@ model_regression_final.add(LeakyReLU(16, 0.01))
 model_regression_final.add(Linear(16, 1))
 model_regression_final.add(Linear_output(1))
 
-model_regression_final.train(X_train = feature_selection_data_final,
-                            Y_train = y_train_reg,
-                            learning_rate=1*10**-5,
-                            epochs=15000,
-                            loss_fcn='linear',
-                            optimizer='sgd',
-                            batch_size=128,
-                            lamb=0.3,
-                            lamb2=0.45,
-                            verbose=False)
+model_regression_final.train(X_train=feature_selection_data_final,
+                             Y_train=y_train_reg,
+                             learning_rate=1*10**-5,
+                             epochs=15000,
+                             loss_fcn='linear',
+                             optimizer='sgd',
+                             batch_size=128,
+                             lamb=0.3,
+                             lamb2=0.45,
+                             verbose=False)
 
-#%%
+# %%
 prediction_regression_final = model_regression_final.predict(
-    X_test_reg[:,[4,5,6]].T).T
+    X_test_reg[:, [6, 7, 8, 9]].T).T
 
-loss_final = np.mean((prediction_regression_final.flatten() - y_test_reg)**2)**0.5
+loss_final = np.mean(
+    (prediction_regression_final.flatten() - y_test_reg)**2)**0.5
 
 
 # %%
 # saving feature selection data
-import pickle
 
 with open("loss_featue_selection.txt", "wb") as fp:
     pickle.dump(loss_featue_selection_final, fp)
 
 # %%
 feature_plot_x = [9]
-feature_plot_x = feature_plot_x + [j for j in [8, 7, 6, 5, 4, 3] for i in range(j+1)]
+feature_plot_x = feature_plot_x + \
+    [j for j in [8, 7, 6, 5, 4, 3, 2] for i in range(j+1)]
 feature_plot_y = [rmse_train]
-feature_plot_y = feature_plot_y + [ele[1] for ele in loss_featue_selection_final]
+feature_plot_y = feature_plot_y + [ele[1]
+                                   for ele in loss_featue_selection_final]
 
 plt.scatter(feature_plot_x, feature_plot_y)
 plt.title("Feature Selection Plot")
 plt.xlabel("Number of features selected")
 plt.ylabel("Training data rmse")
-plt.axhline(y=rmse_train + threshold, color='r', linestyle='--',  
-lw=2, label='Threshold')
-plt.annotate('4 5 6', (3+0.2, 1.95))
-plt.legend(bbox_to_anchor=(1.04,0.5), loc="center left", borderaxespad=0)
+plt.axhline(y=rmse_train + threshold, color='r', linestyle='--',
+            lw=2, label='Threshold')
+plt.annotate('6 7 8 9', (2+0.2, 1.95))
+plt.legend(bbox_to_anchor=(1.04, 0.5), loc="center left", borderaxespad=0)
 plt.show()
 
 
